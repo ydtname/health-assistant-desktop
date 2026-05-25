@@ -11,10 +11,12 @@ import {
 } from 'electron';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { autoUpdater } from 'electron-updater';
+import electronUpdater from 'electron-updater';
 import { HealthStore } from './store.js';
 import { createInitialClocks, resetClock, snoozeClock, updateEscalation } from '../shared/reminderEngine.js';
 import type { AppSnapshot, ReminderClock, ReminderKind, ReminderSettings, UpdateCheckResult } from '../shared/types.js';
+
+const { autoUpdater } = electronUpdater;
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
