@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-preload/
+release/
+reference-moved-yet/
+*.log
+.env
+.env.*
+!/.env.example
