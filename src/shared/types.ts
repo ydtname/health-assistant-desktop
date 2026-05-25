@@ -47,5 +47,21 @@ export interface UpdateCheckResult {
   configured: boolean;
   message: string;
   url?: string;
-  status?: 'disabled' | 'available' | 'none' | 'error';
+  status?: UpdateStatus['status'];
+  version?: string;
+}
+
+export interface UpdateProgress {
+  percent: number;
+  bytesPerSecond: number;
+  transferred: number;
+  total: number;
+}
+
+export interface UpdateStatus {
+  configured: boolean;
+  status: 'idle' | 'disabled' | 'checking' | 'available' | 'none' | 'downloading' | 'downloaded' | 'error';
+  message: string;
+  version?: string;
+  progress?: UpdateProgress;
 }

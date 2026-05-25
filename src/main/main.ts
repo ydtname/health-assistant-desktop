@@ -5,16 +5,23 @@ import {
   nativeImage,
   Notification,
   dialog,
-  shell,
   Tray,
-  ipcMain
+  ipcMain,
+  type MessageBoxOptions
 } from 'electron';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import electronUpdater from 'electron-updater';
 import { HealthStore } from './store.js';
 import { createInitialClocks, resetClock, snoozeClock, updateEscalation } from '../shared/reminderEngine.js';
-import type { AppSnapshot, ReminderClock, ReminderKind, ReminderSettings, UpdateCheckResult } from '../shared/types.js';
+import type {
+  AppSnapshot,
+  ReminderClock,
+  ReminderKind,
+  ReminderSettings,
+  UpdateCheckResult,
+  UpdateStatus
+} from '../shared/types.js';
 
 const { autoUpdater } = electronUpdater;
 
@@ -29,6 +36,11 @@ let activeReminder: ReminderKind | null = null;
 let tickTimer: NodeJS.Timeout | null = null;
 let workTimer: NodeJS.Timeout | null = null;
 let isQuitting = false;
+let updateStatus: UpdateStatus = {
+  configured: true,
+  status: 'idle',
+  message: '尚未检查更新。'
+};
 const notifiedLevels = new Set<string>();
 const dirname = fileURLToPath(new URL('.', import.meta.url));
 const preloadPath = join(dirname, '../../../dist-preload/preload/preload.js');
@@ -118,6 +130,81 @@ function broadcast(): AppSnapshot {
   const snapshot = getSnapshot();
   mainWindow?.webContents.send('health:snapshot', snapshot);
   return snapshot;
+}
+
+function setUpdateStatus(next: UpdateStatus): UpdateStatus {
+  updateStatus = next;
+  mainWindow?.webContents.send('health:updateStatus', updateStatus);
+  return updateStatus;
+}
+
+function configureUpdater(): void {
+  autoUpdater.autoDownload = false;
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'ydtname',
+    repo: 'health-assistant-desktop'
+  });
+}
+
+function formatBytesPerSecond(bytesPerSecond: number): string {
+  if (bytesPerSecond < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytesPerSecond / 1024))} KB/s`;
+  }
+  return `${(bytesPerSecond / 1024 / 1024).toFixed(1)} MB/s`;
+}
+
+function registerUpdaterEvents(): void {
+  autoUpdater.on('download-progress', progress => {
+    const percent = Math.max(0, Math.min(100, progress.percent || 0));
+    setUpdateStatus({
+      configured: true,
+      status: 'downloading',
+      message: `正在下载更新 ${percent.toFixed(1)}%，速度 ${formatBytesPerSecond(progress.bytesPerSecond || 0)}。`,
+      version: updateStatus.version,
+      progress: {
+        percent,
+        bytesPerSecond: progress.bytesPerSecond || 0,
+        transferred: progress.transferred || 0,
+        total: progress.total || 0
+      }
+    });
+  });
+
+  autoUpdater.on('update-downloaded', info => {
+    setUpdateStatus({
+      configured: true,
+      status: 'downloaded',
+      message: `更新 ${info.version} 已下载完成，重启后即可安装。`,
+      version: info.version
+    });
+    mainWindow?.focus();
+    const messageBoxOptions: MessageBoxOptions = {
+      type: 'info',
+      title: '更新已下载完成',
+      message: `新版本 ${info.version} 已下载完成。`,
+      detail: '是否现在退出并安装更新？',
+      buttons: ['立即安装', '稍后'],
+      defaultId: 0,
+      cancelId: 1
+    };
+    const messageBoxPromise = mainWindow
+      ? dialog.showMessageBox(mainWindow, messageBoxOptions)
+      : dialog.showMessageBox(messageBoxOptions);
+    void messageBoxPromise.then(response => {
+      if (response.response === 0) {
+        autoUpdater.quitAndInstall();
+      }
+    });
+  });
+
+  autoUpdater.on('error', error => {
+    setUpdateStatus({
+      configured: true,
+      status: 'error',
+      message: `更新失败：${error instanceof Error ? error.message : String(error)}`
+    });
+  });
 }
 
 function showNotification(kind: ReminderKind): void {
@@ -233,49 +320,99 @@ async function togglePaused(): Promise<AppSnapshot> {
 
 async function checkForUpdates(): Promise<UpdateCheckResult> {
   if (!app.isPackaged) {
-    return {
+    return setUpdateStatus({
       configured: false,
       status: 'disabled',
       message: '开发模式不检查更新。打包安装后会从 GitHub Releases 检查 ydtname/health-assistant-desktop。'
-    };
+    });
   }
 
   try {
-    autoUpdater.autoDownload = false;
-    autoUpdater.setFeedURL({
-      provider: 'github',
-      owner: 'ydtname',
-      repo: 'health-assistant-desktop'
+    configureUpdater();
+    setUpdateStatus({
+      configured: true,
+      status: 'checking',
+      message: '正在检查更新...'
     });
 
     const result = await autoUpdater.checkForUpdates();
     const updateInfo = result?.updateInfo;
     if (updateInfo?.version && updateInfo.version !== app.getVersion()) {
-      return {
+      return setUpdateStatus({
         configured: true,
         status: 'available',
-        message: `发现新版本 ${updateInfo.version}，请前往 GitHub Releases 下载。`,
-        url: 'https://github.com/ydtname/health-assistant-desktop/releases/latest'
-      };
+        message: `发现新版本 ${updateInfo.version}，可以在软件内下载并安装。`,
+        version: updateInfo.version
+      });
     }
 
-    return {
+    return setUpdateStatus({
       configured: true,
       status: 'none',
-      message: `当前已是最新版本 ${app.getVersion()}。`
-    };
+      message: `当前已经是最新版本 ${app.getVersion()}。`
+    });
   } catch (error) {
-    return {
+    return setUpdateStatus({
       configured: true,
       status: 'error',
       message: `检查更新失败：${error instanceof Error ? error.message : String(error)}`
-    };
+    });
   }
+}
+
+async function downloadUpdate(): Promise<UpdateStatus> {
+  if (!app.isPackaged) {
+    return setUpdateStatus({
+      configured: false,
+      status: 'disabled',
+      message: '开发模式不能下载更新。请安装打包版本后再试。'
+    });
+  }
+
+  if (updateStatus.status !== 'available' && updateStatus.status !== 'error') {
+    return updateStatus;
+  }
+
+  try {
+    configureUpdater();
+    setUpdateStatus({
+      configured: true,
+      status: 'downloading',
+      message: '正在准备下载更新...',
+      version: updateStatus.version,
+      progress: {
+        percent: 0,
+        bytesPerSecond: 0,
+        transferred: 0,
+        total: 0
+      }
+    });
+    await autoUpdater.downloadUpdate();
+    return updateStatus;
+  } catch (error) {
+    return setUpdateStatus({
+      configured: true,
+      status: 'error',
+      message: `下载更新失败：${error instanceof Error ? error.message : String(error)}`
+    });
+  }
+}
+
+async function installUpdate(): Promise<UpdateStatus> {
+  if (updateStatus.status !== 'downloaded') {
+    return updateStatus;
+  }
+  setUpdateStatus({
+    ...updateStatus,
+    message: '正在退出并安装更新...'
+  });
+  autoUpdater.quitAndInstall();
+  return updateStatus;
 }
 
 async function showUpdateDialog(): Promise<void> {
   const result = await checkForUpdates();
-  const buttons = result.url ? ['打开 GitHub Releases', '关闭'] : ['知道了'];
+  const buttons = result.status === 'available' ? ['下载更新', '关闭'] : ['知道了'];
   const response = await dialog.showMessageBox({
     type: result.configured ? 'info' : 'warning',
     title: '检查更新',
@@ -286,8 +423,8 @@ async function showUpdateDialog(): Promise<void> {
     cancelId: buttons.length - 1
   });
 
-  if (result.url && response.response === 0) {
-    await shell.openExternal(result.url);
+  if (result.status === 'available' && response.response === 0) {
+    await downloadUpdate();
   }
 }
 
@@ -303,10 +440,13 @@ function registerIpc(): void {
   ipcMain.handle('health:reset', () => resetAll());
   ipcMain.handle('health:togglePaused', () => togglePaused());
   ipcMain.handle('health:checkForUpdates', () => checkForUpdates());
+  ipcMain.handle('health:downloadUpdate', () => downloadUpdate());
+  ipcMain.handle('health:installUpdate', () => installUpdate());
 }
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
+  registerUpdaterEvents();
   store = new HealthStore();
   await store.load();
   settings = store.getSettings();

@@ -167,6 +167,65 @@ button:hover {
   background: rgba(120, 53, 15, 0.34);
 }
 
+.updateNotice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 320px) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.updateNotice.available,
+.updateNotice.downloading,
+.updateNotice.downloaded {
+  border-color: rgba(34, 211, 238, 0.42);
+  color: #cffafe;
+  background: rgba(8, 47, 73, 0.46);
+}
+
+.updateNotice.error {
+  border-color: rgba(251, 113, 133, 0.52);
+  color: #fecdd3;
+  background: rgba(76, 5, 25, 0.44);
+}
+
+.updateCopy {
+  display: grid;
+  gap: 4px;
+}
+
+.updateCopy small {
+  color: var(--muted);
+}
+
+.progressTrack {
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.progressTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--cyan), var(--lime));
+  transition: width 0.2s ease;
+}
+
+.updateActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.updateActions strong {
+  min-width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -300,6 +359,14 @@ input[type="number"] {
   .grid,
   .settings {
     grid-template-columns: 1fr;
+  }
+
+  .updateNotice {
+    grid-template-columns: 1fr;
+  }
+
+  .updateActions {
+    justify-content: flex-start;
   }
 
   .scoreRing {

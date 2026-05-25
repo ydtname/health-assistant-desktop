@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { calculateHealthScore, healthRating, healthSuggestions } from '../shared/healthScore.js';
-import type { AppSnapshot, ReminderKind, ReminderSettings } from '../shared/types.js';
+import type { AppSnapshot, ReminderKind, ReminderSettings, UpdateStatus } from '../shared/types.js';
 
 function formatRemaining(ms: number): string {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
@@ -23,10 +23,24 @@ function isStrongRoute(): ReminderKind | null {
   return null;
 }
 
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '0 KB';
+  }
+  if (bytes < 1024 * 1024) {
+    return `${Math.round(bytes / 1024)} KB`;
+  }
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatSpeed(bytesPerSecond: number): string {
+  return `${formatBytes(bytesPerSecond)}/s`;
+}
+
 export function App() {
   const [snapshot, setSnapshot] = useState<AppSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [strongKind] = useState<ReminderKind | null>(() => isStrongRoute());
 
   useEffect(() => {
@@ -38,7 +52,12 @@ export function App() {
     void window.healthAssistant.getSnapshot().then(setSnapshot).catch(reason => {
       setError(reason instanceof Error ? reason.message : String(reason));
     });
-    return window.healthAssistant.onSnapshot(setSnapshot);
+    const offSnapshot = window.healthAssistant.onSnapshot(setSnapshot);
+    const offUpdateStatus = window.healthAssistant.onUpdateStatus(setUpdateStatus);
+    return () => {
+      offSnapshot();
+      offUpdateStatus();
+    };
   }, []);
 
   const score = useMemo(() => {
@@ -87,10 +106,15 @@ export function App() {
   const suggestions = healthSuggestions(snapshot.stats);
   const handleCheckUpdates = async () => {
     const result = await window.healthAssistant.checkForUpdates();
-    setUpdateMessage(result.message);
-    if (result.url) {
-      window.setTimeout(() => setUpdateMessage(null), 5000);
-    }
+    setUpdateStatus(result as UpdateStatus);
+  };
+  const handleDownloadUpdate = async () => {
+    const result = await window.healthAssistant.downloadUpdate();
+    setUpdateStatus(result);
+  };
+  const handleInstallUpdate = async () => {
+    const result = await window.healthAssistant.installUpdate();
+    setUpdateStatus(result);
   };
 
   return (
@@ -107,7 +131,13 @@ export function App() {
           </button>
         </div>
       </section>
-      {updateMessage && <div className="notice">{updateMessage}</div>}
+      {updateStatus && (
+        <UpdatePanel
+          status={updateStatus}
+          onDownload={() => void handleDownloadUpdate()}
+          onInstall={() => void handleInstallUpdate()}
+        />
+      )}
 
       <section className="hero">
         <div
@@ -174,6 +204,41 @@ export function App() {
         </div>
       </section>
     </main>
+  );
+}
+
+function UpdatePanel(props: {
+  status: UpdateStatus;
+  onDownload: () => void;
+  onInstall: () => void;
+}) {
+  const progress = props.status.progress;
+  const percent = progress ? Math.round(progress.percent) : 0;
+  const canDownload = props.status.status === 'available';
+  const canInstall = props.status.status === 'downloaded';
+  const isDownloading = props.status.status === 'downloading';
+
+  return (
+    <section className={`notice updateNotice ${props.status.status}`}>
+      <div className="updateCopy">
+        <p>{props.status.message}</p>
+        {progress && (
+          <small>
+            {formatBytes(progress.transferred)} / {formatBytes(progress.total)} · {formatSpeed(progress.bytesPerSecond)}
+          </small>
+        )}
+      </div>
+      {(isDownloading || progress) && (
+        <div className="progressTrack" aria-label="更新下载进度">
+          <span style={{ width: `${percent}%` }} />
+        </div>
+      )}
+      <div className="updateActions">
+        {isDownloading && <strong>{percent}%</strong>}
+        {canDownload && <button className="primary" onClick={props.onDownload}>下载更新</button>}
+        {canInstall && <button className="primary" onClick={props.onInstall}>立即安装</button>}
+      </div>
+    </section>
   );
 }
 
