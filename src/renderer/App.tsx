@@ -1,4 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import {
+  completeActionFeedback,
+  getActionFeedback,
+  startActionFeedback,
+  type ActionFeedback
+} from '../shared/actionFeedback.js';
 import { calculateHealthScore, healthRating, healthSuggestions } from '../shared/healthScore.js';
 import type { AppSnapshot, ReminderKind, ReminderSettings, UpdateStatus } from '../shared/types.js';
 
@@ -42,6 +48,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [strongKind] = useState<ReminderKind | null>(() => isStrongRoute());
+  const [actionFeedback, setActionFeedback] = useState<ActionFeedback>(null);
 
   useEffect(() => {
     if (!window.healthAssistant) {
@@ -104,6 +111,20 @@ export function App() {
 
   const rating = healthRating(score);
   const suggestions = healthSuggestions(snapshot.stats);
+  const sitFeedback = getActionFeedback(actionFeedback, 'sit', '已起身');
+  const drinkFeedback = getActionFeedback(actionFeedback, 'drink', '已喝水');
+  const handleConfirm = async (kind: ReminderKind) => {
+    setActionFeedback(current => startActionFeedback(current, kind));
+    try {
+      const nextSnapshot = await window.healthAssistant.confirm(kind);
+      setSnapshot(nextSnapshot);
+      setActionFeedback(current => completeActionFeedback(current));
+      window.setTimeout(() => setActionFeedback(null), 900);
+    } catch (reason) {
+      setActionFeedback(null);
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  };
   const handleCheckUpdates = async () => {
     const result = await window.healthAssistant.checkForUpdates();
     setUpdateStatus(result as UpdateStatus);
@@ -151,8 +172,12 @@ export function App() {
           <h2>{snapshot.paused ? '提醒已暂停' : '今天的节奏正在守住'}</h2>
           <p>{suggestions[0]}</p>
           <div className="actions">
-            <button className="primary" onClick={() => void window.healthAssistant.confirm('sit')}>已起身</button>
-            <button className="primary water" onClick={() => void window.healthAssistant.confirm('drink')}>已喝水</button>
+            <button className="primary" disabled={sitFeedback.disabled} onClick={() => void handleConfirm('sit')}>
+              {sitFeedback.label}
+            </button>
+            <button className="primary water" disabled={drinkFeedback.disabled} onClick={() => void handleConfirm('drink')}>
+              {drinkFeedback.label}
+            </button>
             <button onClick={() => void window.healthAssistant.reset()}>重置计时器</button>
           </div>
         </div>

@@ -94,6 +94,16 @@ button:hover {
   border-color: rgba(34, 211, 238, 0.65);
 }
 
+button:disabled {
+  cursor: default;
+  opacity: 0.72;
+  transform: none;
+}
+
+button:disabled:hover {
+  border-color: var(--line);
+}
+
 .primary {
   border-color: rgba(34, 211, 238, 0.4);
   background: linear-gradient(135deg, #0891b2, #164e63);

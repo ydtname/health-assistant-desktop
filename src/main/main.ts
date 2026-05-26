@@ -7,6 +7,7 @@ import {
   dialog,
   Tray,
   ipcMain,
+  screen,
   type MessageBoxOptions
 } from 'electron';
 import { join } from 'node:path';
@@ -14,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 import electronUpdater from 'electron-updater';
 import { HealthStore } from './store.js';
 import { createInitialClocks, resetClock, snoozeClock, updateEscalation } from '../shared/reminderEngine.js';
+import { formatTrayTooltip } from '../shared/trayTooltip.js';
+import { placeInBottomRight } from '../shared/windowPlacement.js';
 import type {
   AppSnapshot,
   ReminderClock,
@@ -46,6 +49,8 @@ const dirname = fileURLToPath(new URL('.', import.meta.url));
 const preloadPath = join(dirname, '../../../dist-preload/preload/preload.js');
 const appIconPath = join(dirname, '../../../assets/icons/health-256.png');
 const trayIconPath = join(dirname, '../../../assets/icons/health-tray.png');
+const strongReminderSize = { width: 460, height: 310 };
+const strongReminderMargin = 24;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -83,9 +88,13 @@ function createWindow(): void {
 function createTray(): void {
   const image = nativeImage.createFromPath(trayIconPath);
   tray = new Tray(image);
-  tray.setToolTip('健康助手');
+  updateTrayTooltip();
   updateTrayMenu();
   tray.on('click', () => showMainWindow());
+}
+
+function updateTrayTooltip(now = Date.now()): void {
+  tray?.setToolTip(formatTrayTooltip({ clocks, paused, now }));
 }
 
 function updateTrayMenu(): void {
@@ -217,14 +226,20 @@ function showNotification(kind: ReminderKind): void {
 
 function showStrongReminder(kind: ReminderKind): void {
   activeReminder = kind;
-  showMainWindow();
   if (strongWindow && !strongWindow.isDestroyed()) {
     strongWindow.focus();
     return;
   }
+  const cursorPoint = screen.getCursorScreenPoint();
+  const { workArea } = screen.getDisplayNearestPoint(cursorPoint);
+  const position = placeInBottomRight({
+    workArea,
+    window: strongReminderSize,
+    margin: strongReminderMargin
+  });
   strongWindow = new BrowserWindow({
-    width: 460,
-    height: 310,
+    ...strongReminderSize,
+    ...position,
     resizable: false,
     alwaysOnTop: true,
     title: kind === 'sit' ? '起身提醒' : '喝水提醒',
@@ -267,6 +282,7 @@ function startLoops(): void {
         }
       }
     }
+    updateTrayTooltip();
     broadcast();
   }, 1000);
 
@@ -292,6 +308,7 @@ async function confirmReminder(kind: ReminderKind): Promise<AppSnapshot> {
   activeReminder = null;
   notifiedLevels.clear();
   strongWindow?.close();
+  updateTrayTooltip();
   return broadcast();
 }
 
@@ -301,6 +318,7 @@ async function snoozeReminder(kind: ReminderKind): Promise<AppSnapshot> {
   activeReminder = null;
   notifiedLevels.clear();
   strongWindow?.close();
+  updateTrayTooltip();
   return broadcast();
 }
 
@@ -309,11 +327,13 @@ async function resetAll(): Promise<AppSnapshot> {
   activeReminder = null;
   notifiedLevels.clear();
   strongWindow?.close();
+  updateTrayTooltip();
   return broadcast();
 }
 
 async function togglePaused(): Promise<AppSnapshot> {
   paused = !paused;
+  updateTrayTooltip();
   updateTrayMenu();
   return broadcast();
 }
@@ -433,6 +453,7 @@ function registerIpc(): void {
   ipcMain.handle('health:updateSettings', async (_event, patch: Partial<ReminderSettings>) => {
     settings = await store.updateSettings(patch);
     clocks = createInitialClocks(settings);
+    updateTrayTooltip();
     return broadcast();
   });
   ipcMain.handle('health:confirm', (_event, kind: ReminderKind) => confirmReminder(kind));
