@@ -2,6 +2,13 @@ import type { ReminderClock, ReminderKind, ReminderSettings } from './types.js';
 
 const minute = 60_000;
 
+export type ReminderEffect = 'notification' | 'strong';
+
+export interface ReminderEffectRequest {
+  key: string;
+  effect: ReminderEffect;
+}
+
 function intervalFor(kind: ReminderKind, settings: ReminderSettings): number {
   return kind === 'sit' ? settings.sitIntervalMinutes : settings.drinkIntervalMinutes;
 }
@@ -53,6 +60,27 @@ export function updateEscalation(
   const escalationLevel = overdueMs > levelThreeAt ? 3 : overdueMs > levelTwoAt ? 2 : 1;
 
   return { ...clock, escalationLevel };
+}
+
+export function reminderEffectForEscalation(
+  kind: ReminderKind,
+  escalationLevel: ReminderClock['escalationLevel'],
+  emittedKeys: ReadonlySet<string>
+): ReminderEffectRequest | null {
+  const key = `${kind}:${escalationLevel}`;
+  if (escalationLevel === 0 || emittedKeys.has(key)) {
+    return null;
+  }
+
+  if (escalationLevel === 1) {
+    return { key, effect: 'notification' };
+  }
+
+  if (escalationLevel === 3) {
+    return { key, effect: 'strong' };
+  }
+
+  return null;
 }
 
 export function snoozeClock(clock: ReminderClock, settings: ReminderSettings, now = Date.now()): ReminderClock {

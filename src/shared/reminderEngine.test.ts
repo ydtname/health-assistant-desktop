@@ -3,6 +3,7 @@ import { defaultSettings } from './defaults.js';
 import {
   createInitialClocks,
   getClockStatus,
+  reminderEffectForEscalation,
   resetClock,
   snoozeClock,
   updateEscalation
@@ -36,5 +37,24 @@ describe('reminder engine', () => {
       5_000 + 10 * 60_000
     );
     expect(resetClock('drink', defaultSettings, 5_000).dueAt).toBe(5_000 + 45 * 60_000);
+  });
+
+  it('requests a desktop notification as soon as a reminder becomes due', () => {
+    expect(reminderEffectForEscalation('sit', 1, new Set())).toEqual({
+      key: 'sit:1',
+      effect: 'notification'
+    });
+  });
+
+  it('does not repeat an already emitted reminder effect', () => {
+    expect(reminderEffectForEscalation('drink', 1, new Set(['drink:1']))).toBeNull();
+  });
+
+  it('requests a strong reminder only at the strong escalation level', () => {
+    expect(reminderEffectForEscalation('drink', 2, new Set())).toBeNull();
+    expect(reminderEffectForEscalation('drink', 3, new Set())).toEqual({
+      key: 'drink:3',
+      effect: 'strong'
+    });
   });
 });

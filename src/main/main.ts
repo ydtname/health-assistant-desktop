@@ -14,7 +14,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import electronUpdater from 'electron-updater';
 import { HealthStore } from './store.js';
-import { createInitialClocks, resetClock, snoozeClock, updateEscalation } from '../shared/reminderEngine.js';
+import {
+  createInitialClocks,
+  reminderEffectForEscalation,
+  resetClock,
+  snoozeClock,
+  updateEscalation
+} from '../shared/reminderEngine.js';
 import { formatTrayTooltip } from '../shared/trayTooltip.js';
 import { placeInBottomRight } from '../shared/windowPlacement.js';
 import type {
@@ -271,13 +277,13 @@ function startLoops(): void {
       for (const kind of ['sit', 'drink'] as ReminderKind[]) {
         const next = updateEscalation(clocks[kind], now, settings);
         clocks[kind] = next;
-        const key = `${kind}:${next.escalationLevel}`;
-        if (next.escalationLevel === 2 && !notifiedLevels.has(key)) {
-          notifiedLevels.add(key);
+        const request = reminderEffectForEscalation(kind, next.escalationLevel, notifiedLevels);
+        if (request?.effect === 'notification') {
+          notifiedLevels.add(request.key);
           showNotification(kind);
         }
-        if (next.escalationLevel === 3 && !notifiedLevels.has(key)) {
-          notifiedLevels.add(key);
+        if (request?.effect === 'strong') {
+          notifiedLevels.add(request.key);
           showStrongReminder(kind);
         }
       }
