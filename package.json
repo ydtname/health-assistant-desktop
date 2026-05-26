@@ -1,6 +1,6 @@
 {
   "name": "health-assistant-desktop",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "A lightweight tray health assistant for sit and water reminders.",
   "main": "dist/src/main/main.js",
