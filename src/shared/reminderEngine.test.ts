@@ -5,6 +5,7 @@ import {
   getClockStatus,
   reminderEffectForEscalation,
   resetClock,
+  shouldConfirmNotificationClick,
   snoozeClock,
   updateEscalation
 } from './reminderEngine.js';
@@ -24,7 +25,7 @@ describe('reminder engine', () => {
     expect(getClockStatus(clock, 61 * 60_000).isDue).toBe(true);
   });
 
-  it('escalates through gentle, notification, and strong levels', () => {
+  it('escalates through notification levels', () => {
     const dueClock = { ...resetClock('sit', defaultSettings, 0), dueAt: 0 };
 
     expect(updateEscalation(dueClock, 1, defaultSettings).escalationLevel).toBe(1);
@@ -50,11 +51,16 @@ describe('reminder engine', () => {
     expect(reminderEffectForEscalation('drink', 1, new Set(['drink:1']))).toBeNull();
   });
 
-  it('requests a strong reminder only at the strong escalation level', () => {
+  it('keeps escalated reminders on desktop notifications instead of strong windows', () => {
     expect(reminderEffectForEscalation('drink', 2, new Set())).toBeNull();
     expect(reminderEffectForEscalation('drink', 3, new Set())).toEqual({
       key: 'drink:3',
-      effect: 'strong'
+      effect: 'notification'
     });
+  });
+
+  it('only confirms notification clicks while the reminder is still due', () => {
+    expect(shouldConfirmNotificationClick({ ...resetClock('sit', defaultSettings, 0), dueAt: 0 }, 1)).toBe(true);
+    expect(shouldConfirmNotificationClick(resetClock('sit', defaultSettings, 0), 1)).toBe(false);
   });
 });

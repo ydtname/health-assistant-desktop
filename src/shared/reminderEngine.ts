@@ -2,7 +2,7 @@ import type { ReminderClock, ReminderKind, ReminderSettings } from './types.js';
 
 const minute = 60_000;
 
-export type ReminderEffect = 'notification' | 'strong';
+export type ReminderEffect = 'notification';
 
 export interface ReminderEffectRequest {
   key: string;
@@ -72,15 +72,15 @@ export function reminderEffectForEscalation(
     return null;
   }
 
-  if (escalationLevel === 1) {
+  if (escalationLevel === 1 || escalationLevel === 3) {
     return { key, effect: 'notification' };
   }
 
-  if (escalationLevel === 3) {
-    return { key, effect: 'strong' };
-  }
-
   return null;
+}
+
+export function shouldConfirmNotificationClick(clock: ReminderClock, now = Date.now()): boolean {
+  return clock.enabled && now >= clock.dueAt;
 }
 
 export function snoozeClock(clock: ReminderClock, settings: ReminderSettings, now = Date.now()): ReminderClock {

@@ -7,7 +7,6 @@ import {
   dialog,
   Tray,
   ipcMain,
-  screen,
   type MessageBoxOptions
 } from 'electron';
 import { join } from 'node:path';
@@ -18,11 +17,11 @@ import {
   createInitialClocks,
   reminderEffectForEscalation,
   resetClock,
+  shouldConfirmNotificationClick,
   snoozeClock,
   updateEscalation
 } from '../shared/reminderEngine.js';
 import { formatTrayTooltip } from '../shared/trayTooltip.js';
-import { placeInBottomRight } from '../shared/windowPlacement.js';
 import type {
   AppSnapshot,
   ReminderClock,
@@ -36,12 +35,10 @@ const { autoUpdater } = electronUpdater;
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
-let strongWindow: BrowserWindow | null = null;
 let store: HealthStore;
 let settings: ReminderSettings;
 let clocks: Record<ReminderKind, ReminderClock>;
 let paused = false;
-let activeReminder: ReminderKind | null = null;
 let tickTimer: NodeJS.Timeout | null = null;
 let workTimer: NodeJS.Timeout | null = null;
 let isQuitting = false;
@@ -55,8 +52,6 @@ const dirname = fileURLToPath(new URL('.', import.meta.url));
 const preloadPath = join(dirname, '../../../dist-preload/preload/preload.js');
 const appIconPath = join(dirname, '../../../assets/icons/health-256.png');
 const trayIconPath = join(dirname, '../../../assets/icons/health-tray.png');
-const strongReminderSize = { width: 460, height: 310 };
-const strongReminderMargin = 24;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -137,7 +132,7 @@ function getSnapshot(now = Date.now()): AppSnapshot {
     clocks,
     paused,
     now,
-    activeReminder
+    activeReminder: null
   };
 }
 
@@ -226,48 +221,14 @@ function showNotification(kind: ReminderKind): void {
   const title = kind === 'sit' ? '该起身活动了' : '该喝水了';
   const body = kind === 'sit' ? '站起来走一走，伸展肩颈。' : '补一口水，让大脑继续清醒。';
   if (Notification.isSupported()) {
-    new Notification({ title, body }).show();
+    const notification = new Notification({ title, body });
+    notification.on('click', () => {
+      if (shouldConfirmNotificationClick(clocks[kind])) {
+        void confirmReminder(kind);
+      }
+    });
+    notification.show();
   }
-}
-
-function showStrongReminder(kind: ReminderKind): void {
-  activeReminder = kind;
-  if (strongWindow && !strongWindow.isDestroyed()) {
-    strongWindow.focus();
-    return;
-  }
-  const cursorPoint = screen.getCursorScreenPoint();
-  const { workArea } = screen.getDisplayNearestPoint(cursorPoint);
-  const position = placeInBottomRight({
-    workArea,
-    window: strongReminderSize,
-    margin: strongReminderMargin
-  });
-  strongWindow = new BrowserWindow({
-    ...strongReminderSize,
-    ...position,
-    resizable: false,
-    alwaysOnTop: true,
-    title: kind === 'sit' ? '起身提醒' : '喝水提醒',
-    backgroundColor: '#090c10',
-    icon: appIconPath,
-    autoHideMenuBar: true,
-    webPreferences: {
-      preload: preloadPath,
-      contextIsolation: true,
-      nodeIntegration: false
-    }
-  });
-  const hash = kind === 'sit' ? '#strong-sit' : '#strong-drink';
-  const devUrl = process.env.VITE_DEV_SERVER_URL;
-  if (devUrl) {
-    void strongWindow.loadURL(`${devUrl}${hash}`);
-  } else {
-    void strongWindow.loadFile(join(dirname, '../../renderer/index.html'), { hash: hash.slice(1) });
-  }
-  strongWindow.on('closed', () => {
-    strongWindow = null;
-  });
 }
 
 function startLoops(): void {
@@ -281,10 +242,6 @@ function startLoops(): void {
         if (request?.effect === 'notification') {
           notifiedLevels.add(request.key);
           showNotification(kind);
-        }
-        if (request?.effect === 'strong') {
-          notifiedLevels.add(request.key);
-          showStrongReminder(kind);
         }
       }
     }
@@ -311,9 +268,7 @@ function stopLoops(): void {
 async function confirmReminder(kind: ReminderKind): Promise<AppSnapshot> {
   await store.addRecord({ id: `${kind}-${Date.now()}`, kind, timestamp: Date.now(), action: 'confirmed' });
   clocks[kind] = resetClock(kind, settings);
-  activeReminder = null;
   notifiedLevels.clear();
-  strongWindow?.close();
   updateTrayTooltip();
   return broadcast();
 }
@@ -321,18 +276,14 @@ async function confirmReminder(kind: ReminderKind): Promise<AppSnapshot> {
 async function snoozeReminder(kind: ReminderKind): Promise<AppSnapshot> {
   await store.addRecord({ id: `${kind}-${Date.now()}`, kind, timestamp: Date.now(), action: 'snoozed' });
   clocks[kind] = snoozeClock(clocks[kind], settings);
-  activeReminder = null;
   notifiedLevels.clear();
-  strongWindow?.close();
   updateTrayTooltip();
   return broadcast();
 }
 
 async function resetAll(): Promise<AppSnapshot> {
   clocks = createInitialClocks(settings);
-  activeReminder = null;
   notifiedLevels.clear();
-  strongWindow?.close();
   updateTrayTooltip();
   return broadcast();
 }

@@ -19,16 +19,6 @@ function remaining(snapshot: AppSnapshot, kind: ReminderKind): number {
   return snapshot.clocks[kind].dueAt - snapshot.now;
 }
 
-function isStrongRoute(): ReminderKind | null {
-  if (window.location.hash === '#strong-sit') {
-    return 'sit';
-  }
-  if (window.location.hash === '#strong-drink') {
-    return 'drink';
-  }
-  return null;
-}
-
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) {
     return '0 KB';
@@ -47,7 +37,6 @@ export function App() {
   const [snapshot, setSnapshot] = useState<AppSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
-  const [strongKind] = useState<ReminderKind | null>(() => isStrongRoute());
   const [actionFeedback, setActionFeedback] = useState<ActionFeedback>(null);
 
   useEffect(() => {
@@ -88,25 +77,6 @@ export function App() {
 
   if (!snapshot) {
     return <main className="app loading">加载健康节奏...</main>;
-  }
-
-  if (strongKind) {
-    const title = strongKind === 'sit' ? '起来动一动' : '喝口水';
-    const copy = strongKind === 'sit' ? '离开椅子两分钟，肩颈会感谢你。' : '补水不是打断，是给专注续航。';
-    return (
-      <main className="strong">
-        <div className="pulse" />
-        <p className="eyebrow">强提醒</p>
-        <h1>{title}</h1>
-        <p>{copy}</p>
-        <div className="actions">
-          <button className="primary" onClick={() => void window.healthAssistant.confirm(strongKind)}>
-            {strongKind === 'sit' ? '已起身' : '已喝水'}
-          </button>
-          <button onClick={() => void window.healthAssistant.snooze(strongKind)}>稍后提醒</button>
-        </div>
-      </main>
-    );
   }
 
   const rating = healthRating(score);

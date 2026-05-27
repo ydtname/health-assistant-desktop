@@ -337,33 +337,6 @@ input[type="number"] {
   color: var(--muted);
 }
 
-.strong {
-  min-height: 100vh;
-  box-sizing: border-box;
-  padding: 32px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 14px;
-  background: radial-gradient(circle at 70% 20%, rgba(251, 191, 36, 0.18), transparent 18rem), var(--bg);
-}
-
-.strong h1 {
-  font-size: 40px;
-}
-
-.strong p {
-  color: var(--muted);
-}
-
-.pulse {
-  width: 54px;
-  height: 54px;
-  border-radius: 999px;
-  background: var(--gold);
-  box-shadow: 0 0 42px rgba(251, 191, 36, 0.65);
-}
-
 @media (max-width: 920px) {
   .hero,
   .grid,
