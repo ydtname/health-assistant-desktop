@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { defaultSettings } from './defaults.js';
 import {
+  combineReminderEffectRequests,
+  collectDueReminderKinds,
   createInitialClocks,
   getClockStatus,
   reminderEffectForEscalation,
@@ -44,6 +46,7 @@ describe('reminder engine', () => {
   it('requests a desktop notification as soon as a reminder becomes due', () => {
     expect(reminderEffectForEscalation('sit', 1, new Set())).toEqual({
       key: 'sit:1',
+      kind: 'sit',
       effect: 'notification'
     });
   });
@@ -64,8 +67,30 @@ describe('reminder engine', () => {
     expect(reminderEffectForEscalation('drink', 2, new Set())).toBeNull();
     expect(reminderEffectForEscalation('drink', 3, new Set())).toEqual({
       key: 'drink:3',
+      kind: 'drink',
       effect: 'notification'
     });
+  });
+
+  it('combines simultaneous notification requests into one notification payload', () => {
+    expect(
+      combineReminderEffectRequests([
+        { key: 'sit:1', kind: 'sit', effect: 'notification' },
+        { key: 'drink:1', kind: 'drink', effect: 'notification' }
+      ])
+    ).toEqual({
+      keys: ['sit:1', 'drink:1'],
+      kinds: ['sit', 'drink'],
+      effect: 'notification'
+    });
+  });
+
+  it('collects every reminder that is already waiting for acknowledgement', () => {
+    const clocks = createInitialClocks(defaultSettings, 0);
+    clocks.sit = { ...clocks.sit, dueAt: 0, escalationLevel: 1 };
+    clocks.drink = { ...clocks.drink, dueAt: 0, escalationLevel: 1 };
+
+    expect(collectDueReminderKinds(clocks)).toEqual(['sit', 'drink']);
   });
 
   it('only confirms notification clicks while the reminder is still due', () => {

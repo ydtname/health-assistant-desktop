@@ -6,6 +6,13 @@ export type ReminderEffect = 'notification';
 
 export interface ReminderEffectRequest {
   key: string;
+  kind: ReminderKind;
+  effect: ReminderEffect;
+}
+
+export interface CombinedReminderEffectRequest {
+  keys: string[];
+  kinds: ReminderKind[];
   effect: ReminderEffect;
 }
 
@@ -73,10 +80,28 @@ export function reminderEffectForEscalation(
   }
 
   if (escalationLevel === 1 || escalationLevel === 3) {
-    return { key, effect: 'notification' };
+    return { key, kind, effect: 'notification' };
   }
 
   return null;
+}
+
+export function combineReminderEffectRequests(
+  requests: ReminderEffectRequest[]
+): CombinedReminderEffectRequest | null {
+  if (requests.length === 0) {
+    return null;
+  }
+
+  return {
+    keys: requests.map(request => request.key),
+    kinds: requests.map(request => request.kind),
+    effect: 'notification'
+  };
+}
+
+export function collectDueReminderKinds(clocks: Record<ReminderKind, ReminderClock>): ReminderKind[] {
+  return (['sit', 'drink'] as ReminderKind[]).filter(kind => clocks[kind].enabled && clocks[kind].escalationLevel > 0);
 }
 
 export function clearReminderEffectKeys(kind: ReminderKind, emittedKeys: Set<string>): void {

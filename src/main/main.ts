@@ -15,12 +15,15 @@ import electronUpdater from 'electron-updater';
 import { HealthStore } from './store.js';
 import {
   clearReminderEffectKeys,
+  collectDueReminderKinds,
+  combineReminderEffectRequests,
   createInitialClocks,
   reminderEffectForEscalation,
   resetClock,
   shouldConfirmNotificationClick,
   snoozeClock,
-  updateEscalation
+  updateEscalation,
+  type ReminderEffectRequest
 } from '../shared/reminderEngine.js';
 import { formatTrayTooltip } from '../shared/trayTooltip.js';
 import type {
@@ -232,18 +235,53 @@ function showNotification(kind: ReminderKind): void {
   }
 }
 
+function combinedNotificationText(kinds: ReminderKind[]): { title: string; body: string } {
+  if (kinds.includes('sit') && kinds.includes('drink')) {
+    return {
+      title: '该起身并喝水了',
+      body: '起来走一走，顺便补一口水。'
+    };
+  }
+
+  const kind = kinds[0];
+  return {
+    title: kind === 'sit' ? '该起身活动了' : '该喝水了',
+    body: kind === 'sit' ? '站起来走一走，伸展肩颈。' : '补一口水，让大脑继续清醒。'
+  };
+}
+
+function showCombinedNotification(kinds: ReminderKind[]): void {
+  if (kinds.length === 0 || !Notification.isSupported()) {
+    return;
+  }
+
+  const { title, body } = combinedNotificationText(kinds);
+  const notification = new Notification({ title, body });
+  notification.on('click', () => {
+    void confirmReminderKinds(kinds.filter(kind => shouldConfirmNotificationClick(clocks[kind])));
+  });
+  notification.show();
+}
+
 function startLoops(): void {
   tickTimer = setInterval(() => {
     if (!paused) {
       const now = Date.now();
+      const requests: ReminderEffectRequest[] = [];
       for (const kind of ['sit', 'drink'] as ReminderKind[]) {
         const next = updateEscalation(clocks[kind], now, settings);
         clocks[kind] = next;
         const request = reminderEffectForEscalation(kind, next.escalationLevel, notifiedLevels);
         if (request?.effect === 'notification') {
-          notifiedLevels.add(request.key);
-          showNotification(kind);
+          requests.push(request);
         }
+      }
+      const combinedRequest = combineReminderEffectRequests(requests);
+      if (combinedRequest?.effect === 'notification') {
+        for (const key of combinedRequest.keys) {
+          notifiedLevels.add(key);
+        }
+        showCombinedNotification(collectDueReminderKinds(clocks));
       }
     }
     updateTrayTooltip();
@@ -270,6 +308,22 @@ async function confirmReminder(kind: ReminderKind): Promise<AppSnapshot> {
   await store.addRecord({ id: `${kind}-${Date.now()}`, kind, timestamp: Date.now(), action: 'confirmed' });
   clocks[kind] = resetClock(kind, settings);
   clearReminderEffectKeys(kind, notifiedLevels);
+  updateTrayTooltip();
+  return broadcast();
+}
+
+async function confirmReminderKinds(kinds: ReminderKind[]): Promise<AppSnapshot> {
+  const uniqueKinds = [...new Set(kinds)];
+  if (uniqueKinds.length === 0) {
+    return getSnapshot();
+  }
+
+  const now = Date.now();
+  for (const kind of uniqueKinds) {
+    await store.addRecord({ id: `${kind}-${now}`, kind, timestamp: now, action: 'confirmed' });
+    clocks[kind] = resetClock(kind, settings, now);
+    clearReminderEffectKeys(kind, notifiedLevels);
+  }
   updateTrayTooltip();
   return broadcast();
 }
