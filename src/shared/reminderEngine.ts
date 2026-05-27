@@ -79,6 +79,14 @@ export function reminderEffectForEscalation(
   return null;
 }
 
+export function clearReminderEffectKeys(kind: ReminderKind, emittedKeys: Set<string>): void {
+  for (const key of emittedKeys) {
+    if (key.startsWith(`${kind}:`)) {
+      emittedKeys.delete(key);
+    }
+  }
+}
+
 export function shouldConfirmNotificationClick(clock: ReminderClock, now = Date.now()): boolean {
   return clock.enabled && now >= clock.dueAt;
 }

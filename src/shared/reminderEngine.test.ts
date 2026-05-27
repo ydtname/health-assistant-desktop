@@ -4,6 +4,7 @@ import {
   createInitialClocks,
   getClockStatus,
   reminderEffectForEscalation,
+  clearReminderEffectKeys,
   resetClock,
   shouldConfirmNotificationClick,
   snoozeClock,
@@ -49,6 +50,14 @@ describe('reminder engine', () => {
 
   it('does not repeat an already emitted reminder effect', () => {
     expect(reminderEffectForEscalation('drink', 1, new Set(['drink:1']))).toBeNull();
+  });
+
+  it('clears emitted reminder effects only for the completed reminder kind', () => {
+    const emittedKeys = new Set(['sit:1', 'drink:1', 'drink:3']);
+
+    clearReminderEffectKeys('drink', emittedKeys);
+
+    expect([...emittedKeys].sort()).toEqual(['sit:1']);
   });
 
   it('keeps escalated reminders on desktop notifications instead of strong windows', () => {

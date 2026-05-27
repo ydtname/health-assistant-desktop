@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import electronUpdater from 'electron-updater';
 import { HealthStore } from './store.js';
 import {
+  clearReminderEffectKeys,
   createInitialClocks,
   reminderEffectForEscalation,
   resetClock,
@@ -268,7 +269,7 @@ function stopLoops(): void {
 async function confirmReminder(kind: ReminderKind): Promise<AppSnapshot> {
   await store.addRecord({ id: `${kind}-${Date.now()}`, kind, timestamp: Date.now(), action: 'confirmed' });
   clocks[kind] = resetClock(kind, settings);
-  notifiedLevels.clear();
+  clearReminderEffectKeys(kind, notifiedLevels);
   updateTrayTooltip();
   return broadcast();
 }
@@ -276,7 +277,7 @@ async function confirmReminder(kind: ReminderKind): Promise<AppSnapshot> {
 async function snoozeReminder(kind: ReminderKind): Promise<AppSnapshot> {
   await store.addRecord({ id: `${kind}-${Date.now()}`, kind, timestamp: Date.now(), action: 'snoozed' });
   clocks[kind] = snoozeClock(clocks[kind], settings);
-  notifiedLevels.clear();
+  clearReminderEffectKeys(kind, notifiedLevels);
   updateTrayTooltip();
   return broadcast();
 }
