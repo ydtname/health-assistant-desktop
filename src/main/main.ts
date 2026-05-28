@@ -107,6 +107,8 @@ function updateTrayMenu(): void {
     Menu.buildFromTemplate([
       { label: '打开健康助手', click: () => showMainWindow() },
       { label: paused ? '继续提醒' : '暂停提醒', click: () => void togglePaused() },
+      { label: '已起身', click: () => void confirmReminder('sit') },
+      { label: '已喝水', click: () => void confirmReminder('drink') },
       { label: '重置计时器', click: () => void resetAll() },
       { label: '检查更新', click: () => void showUpdateDialog() },
       { type: 'separator' },
