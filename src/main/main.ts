@@ -59,7 +59,7 @@ const appIconPath = join(dirname, '../../../assets/icons/health-256.png');
 const trayIconPath = join(dirname, '../../../assets/icons/health-tray.png');
 type DockSide = 'left' | 'right';
 
-const floatingCollapsedSize = { width: 118, height: 118 };
+const floatingCollapsedSize = { width: 144, height: 144 };
 const floatingExpandedSize = { width: 320, height: 440 };
 const floatingEdgeSize = { width: 42, height: 124 };
 const edgeSnapDistance = 22;

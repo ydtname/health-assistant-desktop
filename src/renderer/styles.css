@@ -299,6 +299,7 @@ button:disabled:hover {
   height: 104px;
   min-height: 104px;
   padding: 0;
+  overflow: hidden;
   border-radius: 8px 0 0 8px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background:
@@ -310,12 +311,25 @@ button:disabled:hover {
 .edgeTab span {
   position: absolute;
   left: 10px;
-  top: 14px;
+  bottom: 14px;
   width: 5px;
   height: 76px;
+  max-height: 76px;
+  overflow: hidden;
   border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.edgeTab i {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  min-height: 6px;
+  border-radius: inherit;
   background: linear-gradient(180deg, var(--cyan), var(--lime), var(--coral));
   box-shadow: 0 0 10px rgba(34, 211, 238, 0.32);
+  transition: height 0.2s ease;
 }
 
 .docked-left .edgeTab {
@@ -463,16 +477,6 @@ input[type="number"] {
 }
 
 @media (max-width: 540px) {
-  .floatingAssistant {
-    right: 16px;
-    bottom: 16px;
-  }
-
-  .orb {
-    width: 82px;
-    height: 82px;
-  }
-
   .settingsPanel,
   .updateNotice {
     margin-right: 0;

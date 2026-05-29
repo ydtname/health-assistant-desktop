@@ -143,6 +143,7 @@ export function App() {
   const rating = healthRating(score);
   const suggestions = healthSuggestions(snapshot.stats);
   const floatingStatus = getFloatingAssistantStatus(snapshot);
+  const edgePercent = Math.max(0, Math.min(100, score));
   const sitFeedback = getActionFeedback(actionFeedback, 'sit', '已起身');
   const drinkFeedback = getActionFeedback(actionFeedback, 'drink', '已喝水');
 
@@ -248,7 +249,9 @@ export function App() {
       <section className="floatingAssistant" aria-label="健康助手悬浮球" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
         {dockedSide && (
           <button className="edgeTab" aria-label="展开健康助手" onClick={() => void handleEdgeClick()}>
-            <span />
+            <span>
+              <i style={{ height: `${edgePercent}%` }} />
+            </span>
           </button>
         )}
 
