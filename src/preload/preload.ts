@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { AppSnapshot, ReminderKind, ReminderSettings, UpdateCheckResult, UpdateStatus } from '../shared/types.js';
 
+export type FloatingDockSide = 'left' | 'right';
+
 export interface HealthAssistantApi {
   getSnapshot: () => Promise<AppSnapshot>;
   updateSettings: (settings: Partial<ReminderSettings>) => Promise<AppSnapshot>;
@@ -11,6 +13,10 @@ export interface HealthAssistantApi {
   checkForUpdates: () => Promise<UpdateCheckResult>;
   downloadUpdate: () => Promise<UpdateStatus>;
   installUpdate: () => Promise<UpdateStatus>;
+  setFloatingExpanded: (expanded: boolean) => Promise<void>;
+  dragFloatingBy: (delta: { x: number; y: number }) => Promise<void>;
+  finishFloatingDrag: () => Promise<FloatingDockSide | null>;
+  undockFloating: () => Promise<void>;
   onSnapshot: (callback: (snapshot: AppSnapshot) => void) => () => void;
   onUpdateStatus: (callback: (status: UpdateStatus) => void) => () => void;
 }
@@ -25,6 +31,10 @@ const api: HealthAssistantApi = {
   checkForUpdates: () => ipcRenderer.invoke('health:checkForUpdates'),
   downloadUpdate: () => ipcRenderer.invoke('health:downloadUpdate'),
   installUpdate: () => ipcRenderer.invoke('health:installUpdate'),
+  setFloatingExpanded: expanded => ipcRenderer.invoke('health:setFloatingExpanded', expanded),
+  dragFloatingBy: delta => ipcRenderer.invoke('health:dragFloatingBy', delta),
+  finishFloatingDrag: () => ipcRenderer.invoke('health:finishFloatingDrag'),
+  undockFloating: () => ipcRenderer.invoke('health:undockFloating'),
   onSnapshot: callback => {
     const listener = (_event: Electron.IpcRendererEvent, snapshot: AppSnapshot) => callback(snapshot);
     ipcRenderer.on('health:snapshot', listener);

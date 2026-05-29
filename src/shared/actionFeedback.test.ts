@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getActionFeedback, startActionFeedback, completeActionFeedback } from './actionFeedback.js';
+import { completeActionFeedback, getActionFeedback, startActionFeedback } from './actionFeedback.js';
 
 describe('action feedback', () => {
   it('shows progress and completion labels for the clicked reminder action', () => {

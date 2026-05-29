@@ -5,19 +5,28 @@
   "description": "A lightweight tray health assistant for sit and water reminders.",
   "main": "dist/src/main/main.js",
   "type": "module",
+  "packageManager": "pnpm@11.0.9",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ydtname/health-assistant-desktop.git"
+  },
   "scripts": {
-    "dev": "npm run stop:dev && npm run compile:electron && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "dev": "pnpm stop:dev && pnpm compile:electron && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "stop:dev": "powershell -ExecutionPolicy Bypass -File scripts/stop-dev-processes.ps1",
     "compile:electron": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json",
-    "build": "npm run compile:electron && vite build",
-    "dist:win": "npm run build && electron-builder --win nsis portable",
-    "publish:win": "npm run build && electron-builder --win nsis --publish always",
+    "build": "pnpm compile:electron && vite build",
+    "electron:dev": "pnpm dev",
+    "electron:pack": "pnpm dist:win",
+    "electron:pack:dir": "pnpm build && electron-builder --win --dir",
+    "dist:win": "pnpm build && electron-builder --win nsis portable",
+    "publish:win": "pnpm build && electron-builder --win nsis --publish always",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "build": {
     "appId": "com.codex.health-assistant",
     "productName": "健康助手",
+    "copyright": "Copyright © 2026",
     "publish": [
       {
         "provider": "github",
@@ -42,16 +51,28 @@
     ],
     "win": {
       "icon": "assets/icons/health.ico",
+      "signAndEditExecutable": false,
       "target": [
-        "nsis",
-        "portable"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "artifactName": "health-assistant-setup-${version}.${ext}"
     }
   },
   "dependencies": {
@@ -73,5 +94,8 @@
     "sharp": "^0.34.5",
     "vitest": "^2.1.8",
     "wait-on": "^8.0.1"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

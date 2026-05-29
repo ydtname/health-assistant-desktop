@@ -4,6 +4,7 @@ import {
   Menu,
   nativeImage,
   Notification,
+  screen,
   dialog,
   Tray,
   ipcMain,
@@ -56,15 +57,31 @@ const dirname = fileURLToPath(new URL('.', import.meta.url));
 const preloadPath = join(dirname, '../../../dist-preload/preload/preload.js');
 const appIconPath = join(dirname, '../../../assets/icons/health-256.png');
 const trayIconPath = join(dirname, '../../../assets/icons/health-tray.png');
+type DockSide = 'left' | 'right';
+
+const floatingCollapsedSize = { width: 118, height: 118 };
+const floatingExpandedSize = { width: 320, height: 440 };
+const floatingEdgeSize = { width: 42, height: 124 };
+const edgeSnapDistance = 22;
 
 function createWindow(): void {
+  const workArea = screen.getPrimaryDisplay().workArea;
   mainWindow = new BrowserWindow({
-    width: 1080,
-    height: 760,
-    minWidth: 860,
-    minHeight: 620,
+    width: floatingCollapsedSize.width,
+    height: floatingCollapsedSize.height,
+    minWidth: floatingEdgeSize.width,
+    minHeight: floatingEdgeSize.height,
     show: !settings.launchHidden,
-    backgroundColor: '#090c10',
+    x: Math.round(workArea.x + workArea.width - floatingCollapsedSize.width - 24),
+    y: Math.round(workArea.y + workArea.height - floatingCollapsedSize.height - 24),
+    frame: false,
+    transparent: true,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    backgroundColor: '#00000000',
     title: '健康助手',
     icon: appIconPath,
     autoHideMenuBar: true,
@@ -74,6 +91,8 @@ function createWindow(): void {
       nodeIntegration: false
     }
   });
+  mainWindow.setAlwaysOnTop(true, 'floating');
+  mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {
@@ -87,6 +106,88 @@ function createWindow(): void {
       event.preventDefault();
       mainWindow?.hide();
     }
+  });
+}
+
+function resizeFloatingWindow(expanded: boolean): void {
+  if (!mainWindow) {
+    return;
+  }
+
+  const bounds = mainWindow.getBounds();
+  const nextSize = expanded ? floatingExpandedSize : floatingCollapsedSize;
+  if (bounds.width === nextSize.width && bounds.height === nextSize.height) {
+    return;
+  }
+  mainWindow.setBounds({
+    x: bounds.x + bounds.width - nextSize.width,
+    y: bounds.y + bounds.height - nextSize.height,
+    width: nextSize.width,
+    height: nextSize.height
+  });
+}
+
+function dragFloatingBy(delta: { x: number; y: number }): void {
+  if (!mainWindow) {
+    return;
+  }
+  const bounds = mainWindow.getBounds();
+  mainWindow.setBounds({
+    ...bounds,
+    x: bounds.x + Math.round(delta.x),
+    y: bounds.y + Math.round(delta.y)
+  });
+}
+
+function finishFloatingDrag(): DockSide | null {
+  if (!mainWindow) {
+    return null;
+  }
+
+  const bounds = mainWindow.getBounds();
+  const display = screen.getDisplayMatching(bounds);
+  const workArea = display.workArea;
+  const nearLeft = bounds.x - workArea.x <= edgeSnapDistance;
+  const nearRight = workArea.x + workArea.width - (bounds.x + bounds.width) <= edgeSnapDistance;
+
+  if (!nearLeft && !nearRight) {
+    return null;
+  }
+
+  const side: DockSide = nearLeft ? 'left' : 'right';
+  const nextY = Math.max(
+    workArea.y,
+    Math.min(bounds.y + Math.round((bounds.height - floatingEdgeSize.height) / 2), workArea.y + workArea.height - floatingEdgeSize.height)
+  );
+  mainWindow.setBounds({
+    x: side === 'left' ? workArea.x : workArea.x + workArea.width - floatingEdgeSize.width,
+    y: nextY,
+    width: floatingEdgeSize.width,
+    height: floatingEdgeSize.height
+  });
+  return side;
+}
+
+function undockFloating(): void {
+  if (!mainWindow) {
+    return;
+  }
+  const bounds = mainWindow.getBounds();
+  const display = screen.getDisplayMatching(bounds);
+  const workArea = display.workArea;
+  const isLeft = bounds.x <= workArea.x + Math.round(floatingEdgeSize.width / 2);
+  const nextX = isLeft
+    ? workArea.x + 12
+    : workArea.x + workArea.width - floatingCollapsedSize.width - 12;
+  const nextY = Math.max(
+    workArea.y,
+    Math.min(bounds.y + Math.round((bounds.height - floatingCollapsedSize.height) / 2), workArea.y + workArea.height - floatingCollapsedSize.height)
+  );
+  mainWindow.setBounds({
+    x: nextX,
+    y: nextY,
+    width: floatingCollapsedSize.width,
+    height: floatingCollapsedSize.height
   });
 }
 
@@ -126,6 +227,12 @@ function updateTrayMenu(): void {
 function showMainWindow(): void {
   if (!mainWindow) {
     createWindow();
+  }
+  if (mainWindow) {
+    const bounds = mainWindow.getBounds();
+    if (bounds.width <= floatingEdgeSize.width && bounds.height <= floatingEdgeSize.height) {
+      undockFloating();
+    }
   }
   mainWindow?.show();
   mainWindow?.focus();
@@ -477,6 +584,10 @@ function registerIpc(): void {
   ipcMain.handle('health:checkForUpdates', () => checkForUpdates());
   ipcMain.handle('health:downloadUpdate', () => downloadUpdate());
   ipcMain.handle('health:installUpdate', () => installUpdate());
+  ipcMain.handle('health:setFloatingExpanded', (_event, expanded: boolean) => resizeFloatingWindow(expanded));
+  ipcMain.handle('health:dragFloatingBy', (_event, delta: { x: number; y: number }) => dragFloatingBy(delta));
+  ipcMain.handle('health:finishFloatingDrag', () => finishFloatingDrag());
+  ipcMain.handle('health:undockFloating', () => undockFloating());
 }
 
 app.whenReady().then(async () => {
